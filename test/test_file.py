@@ -107,7 +107,7 @@ class TestEZDiffusion(unittest.TestCase):
             errors_small.append(error_small)
 
             sim_large = simulate_summary_stats(self.a, self.v, self.t, N_large)
-            rec_large = recover_parameters(sim_large['R_obs'], sim_large['M_obs'], sim_large['V_obs'])
+            rec_large = recover_parameters(sim_large['R_obs'], sim_small['M_obs'], sim_large['V_obs'])
             error_large = abs(rec_large['a'] - self.a) + abs(rec_large['v'] - self.v) + abs(rec_large['t'] - self.t)
             errors_large.append(error_large)
 
