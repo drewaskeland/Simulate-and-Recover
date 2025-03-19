@@ -1,70 +1,77 @@
+#Code produced with ChatGPT assistance
+
 import numpy as np
 from ez_diffusion import simulate_summary_stats
 from recovery import recover_parameters
 
-def simulate_and_recover(a_true, v_true, t_true, N, iterations=1000):
+def simulate_and_estimate(sample_size, iterations=1000):
     """
-    Perform the simulate-and-recover loop for a given sample size N for a fixed number
-    of iterations. All iterations are recorded; if an iteration yields invalid recovered
-    parameters, it is recorded as NaN.
-    
+    Run a simulation and parameter estimation loop over a given number of iterations.
+    In each iteration, random true parameters are drawn, summary statistics are simulated,
+    and parameters are recovered.
+
     Parameters:
-        a_true (float): True boundary separation.
-        v_true (float): True drift rate.
-        t_true (float): True nondecision time.
-        N (int): Sample size (number of trials).
-        iterations (int): Total number of iterations to run.
-    
+        sample_size (int): Number of trials.
+        iterations (int): Number of simulation iterations.
+
     Returns:
-        avg_bias (ndarray): Average bias for [a, v, t] computed over valid iterations.
-        avg_squared_error (ndarray): Average squared error for [a, v, t] computed over valid iterations.
-        valid_iterations (int): Number of iterations with valid recovered parameters.
-        invalid_iterations (int): Number of iterations with invalid recovered parameters.
+        tuple: (avg_bias, avg_squared_error, valid_iterations, invalid_iterations)
+            - avg_bias: Mean bias for [drift, boundary, non_decision] across valid iterations.
+            - avg_squared_error: Mean squared error for [drift, boundary, non_decision] across valid iterations.
+            - valid_iterations: Count of iterations with successful recovery.
+            - invalid_iterations: Count of iterations where recovery failed.
     """
     biases = []
     squared_errors = []
-    invalid_count = 0
-    
+    failed_count = 0
+
     for _ in range(iterations):
-        # Unpack the tuple returned by simulate_summary_stats.
-        R_obs, M_obs, V_obs = simulate_summary_stats(a_true, v_true, t_true, N)
-        # Recover parameters; recovery returns a dictionary.
-        recovered = recover_parameters(R_obs, M_obs, V_obs)
+        # Randomly sample true parameters for this iteration.
+        boundary_true = np.random.uniform(0.5, 2)
+        drift_true = np.random.uniform(0.5, 2)
+        non_decision_true = np.random.uniform(0.1, 0.5)
         
-        a_est = recovered["a"]
-        v_est = recovered["v"]
-        t_est = recovered["t"]
+        # Simulate observed summary statistics.
+        R_obs, M_obs, V_obs = simulate_summary_stats(boundary_true, drift_true, non_decision_true, sample_size)
         
-        if np.isnan(a_est) or np.isnan(v_est) or np.isnan(t_est):
+        try:
+            drift_est, boundary_est, non_decision_est = recover_parameters(R_obs, M_obs, V_obs)
+        except ValueError:
+            # Append NaNs when recovery fails (e.g., due to extreme observed values 1 or 0).
             biases.append(np.array([np.nan, np.nan, np.nan]))
             squared_errors.append(np.array([np.nan, np.nan, np.nan]))
-            invalid_count += 1
+            failed_count += 1
+            continue
+        
+        # Check if any recovered parameter is NaN.
+        if np.isnan(drift_est) or np.isnan(boundary_est) or np.isnan(non_decision_est):
+            biases.append(np.array([np.nan, np.nan, np.nan]))
+            squared_errors.append(np.array([np.nan, np.nan, np.nan]))
+            failed_count += 1
         else:
-            bias = np.array([a_true, v_true, t_true]) - np.array([a_est, v_est, t_est])
-            biases.append(bias)
-            squared_errors.append(bias**2)
+            current_bias = np.array([drift_true, boundary_true, non_decision_true]) - np.array([drift_est, boundary_est, non_decision_est])
+            biases.append(current_bias)
+            squared_errors.append(current_bias**2)
     
+    # Compute average bias and squared error over valid iterations.
     biases = np.array(biases)
     squared_errors = np.array(squared_errors)
     avg_bias = np.nanmean(biases, axis=0)
     avg_squared_error = np.nanmean(squared_errors, axis=0)
-    valid_iterations = iterations - invalid_count
+    valid_iterations = iterations - failed_count
     
-    return avg_bias, avg_squared_error, valid_iterations, invalid_count
+    return avg_bias, avg_squared_error, valid_iterations, failed_count
 
 def main():
-    a_true = 1.0   # True boundary separation
-    v_true = 1.0   # True drift rate
-    t_true = 0.3   # True nondecision time
     sample_sizes = [10, 40, 4000]
     
-    for N in sample_sizes:
-        avg_bias, avg_sq_err, valid_iters, invalid_iters = simulate_and_recover(a_true, v_true, t_true, N)
-        print(f"Sample size N = {N}:")
+    for size in sample_sizes:
+        avg_bias, avg_sq_error, valid_iters, invalid_iters = simulate_and_estimate(size)
+        print(f"Sample size = {size}:")
         print("  Valid iterations:", valid_iters)
         print("  Invalid iterations:", invalid_iters)
-        print("  Average Bias [a, v, t]:", avg_bias)
-        print("  Average Squared Error [a, v, t]:", avg_sq_err)
+        print("  Average Bias [drift, boundary, non_decision]:", avg_bias)
+        print("  Average Squared Error [drift, boundary, non_decision]:", avg_sq_error)
         print("-----\n")
 
 if __name__ == "__main__":

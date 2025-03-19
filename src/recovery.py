@@ -1,59 +1,41 @@
+#Code produced with ChatGPT assistance
+
 import numpy as np
 
-def recover_parameters(R_obs, M_obs, V_obs):
+def recover_parameters(accuracy_obs, mean_RT_obs, variance_RT_obs):
     """
-    Recover EZ diffusion model parameters from observed summary statistics,
-    using the expected forward functions:
-        R_pred = 1/(1 + exp(-1.38629 * a * v))
-        M_pred = t + (a / (2 * v)) * ((1 - exp(-1.38629 * a * v)) / (1 + exp(-1.38629 * a * v))) - 0.1
-        V_pred = 0.02 * a^4
-
-    The inversion is given by:
-        a_est = (V_obs / 0.02)^(1/4)
-        v_est = 1 / a_est      (since the model assumes a * v = 1)
-        t_est = M_obs - 0.3 * a_est^2 + 0.1
+    Recover EZ diffusion model parameters from observed summary statistics.
 
     Parameters:
-        R_obs (float): Observed accuracy rate.
-        M_obs (float): Observed mean response time.
-        V_obs (float): Observed variance of response times.
+        accuracy_obs (float): Observed accuracy (must be strictly between 0 and 1).
+        mean_RT_obs (float): Observed mean response time.
+        variance_RT_obs (float): Observed variance of response times.
 
     Returns:
-        dict: A dictionary with keys "a", "v", and "t" corresponding to the 
-              estimated boundary separation, drift rate, and nondecision time.
+        tuple: (drift_est, boundary_est, non_decision_est)
+            - drift_est (float): Recovered drift rate.
+            - boundary_est (float): Recovered boundary separation.
+            - non_decision_est (float): Recovered non-decision time.
     """
-    try:
-        R_obs = float(R_obs)
-        M_obs = float(M_obs)
-        V_obs = float(V_obs)
-    except Exception:
-        raise ValueError("Inputs must be numeric.")
+    if accuracy_obs <= 0.0 or accuracy_obs >= 1.0:
+        raise ValueError("accuracy_obs must be between 0 and 1 (exclusive).")
     
-    if R_obs <= 0 or R_obs >= 1:
-        raise ValueError("Observed accuracy must be strictly between 0 and 1.")
+    eps = 1e-5
+    accuracy_obs = np.clip(accuracy_obs, eps, 1 - eps)
     
-    # Invert the variance equation: since V_pred = 0.02 * a^4, then:
-    a_est = (V_obs / 0.02) ** 0.25
-    if a_est == 0:
-        raise ValueError("Recovered boundary separation is zero, cannot compute drift rate.")
+    thresh = 1e-3
+    if np.abs(accuracy_obs - 0.5) < thresh:
+        accuracy_obs = 0.5 + thresh if accuracy_obs >= 0.5 else 0.5 - thresh
     
-    # Given the assumption that a * v = 1:
-    v_est = 1.0 / a_est
+    log_ratio = np.log(accuracy_obs / (1 - accuracy_obs))
+    sign_val = np.sign(accuracy_obs - 0.5)
     
-    # Invert the mean equation: since M_pred = t + (a/(2*v))*((1 - exp(-1.38629*a*v))/(1 + exp(-1.38629*a*v))) - 0.1,
-    # for the noise-free case with a=1, v=1, t=0.3 we have M_pred = 0.5.
-    # The inversion is approximated as:
-    t_est = M_obs - 0.3 * (a_est ** 2) + 0.1
+    expression = log_ratio * (accuracy_obs**2 * log_ratio - accuracy_obs * log_ratio + accuracy_obs - 0.5)
     
-    return {"a": a_est, "v": v_est, "t": t_est}
-
-if __name__ == "__main__":
-    # Example: for noise-free observations corresponding to a=1, v=1, t=0.3:
-    R_obs = 0.8    # because 1/(1+exp(-1.38629)) ≈ 0.8
-    M_obs = 0.5    # as derived from the forward model
-    V_obs = 0.02   # because V_pred = 0.02 * 1^4 = 0.02
-    try:
-        recovered = recover_parameters(R_obs, M_obs, V_obs)
-        print(f"Recovered parameters: a={recovered['a']:.3f}, v={recovered['v']:.3f}, t={recovered['t']:.3f}")
-    except ValueError as e:
-        print("Error:", e)
+    drift_est = sign_val * (expression / variance_RT_obs)**0.25
+    boundary_est = log_ratio / drift_est
+    non_decision_est = mean_RT_obs - (boundary_est / (2 * drift_est)) * (
+        (1 - np.exp(-boundary_est * drift_est)) / (1 + np.exp(-boundary_est * drift_est))
+    )
+    
+    return drift_est, boundary_est, non_decision_est
