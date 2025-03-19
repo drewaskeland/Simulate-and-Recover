@@ -1,7 +1,5 @@
-#Code produced with ChatGPT assistance
-
 import numpy as np
-from scipy.stats import norm, gamma
+from scipy.stats import norm, gamma, truncnorm
 
 def compute_forward_stats(boundary, drift, non_decision):
     """
@@ -43,7 +41,7 @@ def simulate_summary_stats(boundary, drift, non_decision, N):
     """
     Simulate observed summary statistics from the EZ diffusion model.
     
-    New Parameters:
+    Parameters:
         N (int): Sample size (number of trials).
     
     Returns:
@@ -54,13 +52,13 @@ def simulate_summary_stats(boundary, drift, non_decision, N):
     """
     accuracy_pred, mean_RT_pred, variance_RT_pred = compute_forward_stats(boundary, drift, non_decision)
     
-    # Simulate the number of correct responses using a binomial draw.
-    correct_trials = np.random.binomial(N, accuracy_pred)
-    accuracy_obs = correct_trials / N
-
-    # Clip accuracy to avoid extreme values (0.0 or 1.0) that might cause numerical issues.
-    epsilon = 1e-5
-    accuracy_obs = np.clip(accuracy_obs, epsilon, 1 - epsilon)
+    # Simulate observed accuracy from a truncated normal distribution.
+    # Use the binomial variance approximation for p:
+    # Variance for proportion: p*(1-p)/N, then standard deviation is sqrt(p*(1-p)/N)
+    sd_accuracy = np.sqrt((accuracy_pred * (1 - accuracy_pred)) / N)
+    # Define truncation boundaries (0,1) in standardized units:
+    a, b = (0 - accuracy_pred) / sd_accuracy, (1 - accuracy_pred) / sd_accuracy
+    accuracy_obs = truncnorm.rvs(a, b, loc=accuracy_pred, scale=sd_accuracy)
 
     # Simulate the observed mean response time.
     mean_RT_obs = np.random.normal(mean_RT_pred, np.sqrt(variance_RT_pred / N))
