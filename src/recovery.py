@@ -1,3 +1,5 @@
+# Code produced with assistance from chat GPT
+
 import numpy as np
 
 def recover_parameters(accuracy_obs, mean_RT_obs, variance_RT_obs):
