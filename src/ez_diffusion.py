@@ -1,3 +1,5 @@
+# Code produced with assistance from chat GPT
+
 import numpy as np
 from scipy.stats import norm, gamma, truncnorm
 
