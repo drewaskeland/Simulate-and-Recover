@@ -1,5 +1,3 @@
-#Code produced with Chat GPT assistance
-
 import numpy as np
 from ez_diffusion import simulate_summary_stats
 from recovery import recover_parameters
@@ -30,7 +28,8 @@ def simulate_and_recover(a_true, v_true, t_true, N, iterations=1000):
     for _ in range(iterations):
         # Simulate summary statistics for given true parameters and sample size.
         R_obs, M_obs, V_obs = simulate_summary_stats(a_true, v_true, t_true, N)
-        # Recover parameters; the tests expect the order to be (a, v, t).
+        
+        # Recover parameters (returns a tuple: (a_est, v_est, t_est)).
         a_est, v_est, t_est = recover_parameters(R_obs, M_obs, V_obs)
         
         # Check if recovered parameters are valid (i.e. not NaN)

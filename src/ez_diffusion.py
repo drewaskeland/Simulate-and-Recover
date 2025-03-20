@@ -48,7 +48,7 @@ def simulate_summary_stats(a, v, t, N):
         N (int): Sample size (number of trials).
     
     Returns:
-        dict: A dictionary with keys "R_obs", "M_obs", "V_obs" representing the simulated summary stats.
+        tuple: (R_obs, M_obs, V_obs) representing the simulated summary stats.
     """
     R_pred, M_pred, V_pred = compute_forward_stats(a, v, t)
     
@@ -73,7 +73,7 @@ def simulate_summary_stats(a, v, t, N):
     weight = 0.1
     V_obs = V_pred + weight * (gamma_draw - V_pred)
     
-    return {"R_obs": R_obs, "M_obs": M_obs, "V_obs": V_obs}
+    return R_obs, M_obs, V_obs
 
 if __name__ == "__main__":
     a_true = 1.0

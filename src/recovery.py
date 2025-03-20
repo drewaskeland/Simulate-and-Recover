@@ -87,7 +87,7 @@ def recover_parameters(R_obs, M_obs, V_obs):
     if not np.isfinite(t_est):
         t_est = 0.0
     
-    return {"a": a_est, "v": v_est, "t": t_est}
+    return a_est, v_est, t_est
 
 
 if __name__ == "__main__":
