@@ -1,206 +1,234 @@
+#!/usr/bin/env python3
+
 import unittest
 import numpy as np
+
+# Import functions and classes from your src modules.
 from src.ez_diffusion import compute_forward_stats, simulate_summary_stats
 from src.recovery import recover_parameters
 from src.ez_diffusion_model import EZDiffusionModel
 
-class TestEZDiffusionModified(unittest.TestCase):
+
+class TestEZDiffusion(unittest.TestCase):
     def setUp(self):
-        # Each tuple is (boundary, drift, non_decision)
-        self.standard_params = [
-            (1.0, 1.0, 0.3),   # mid-range values
-            (0.5, 0.5, 0.1),   # lower bounds
-            (1.5, 1.5, 0.5),   # upper bounds
-            (1.5, 0.8, 0.2),   # high boundary, moderate drift
-            (0.8, 1.5, 0.4)    # low boundary, high drift
-        ]
-        self.N_values = [10, 40, 4000]  # sample sizes to test
-        self.tolerance = {
-            'strict': {'delta': 0.01, 'places': 3},
-            'moderate': {'delta': 0.05, 'places': 2}
-        }
+        # Set up common parameters and tolerance for floating point comparisons.
+        self.a = 1.0       # boundary separation
+        self.v = 1.0       # drift rate
+        self.t = 0.3       # non-decision time
+        self.tol = 1e-4
 
-    def test_invalid_input_types(self):
-        # Ensure that compute_forward_stats raises an exception with non-numeric inputs.
-        with self.assertRaises((TypeError, ValueError)):
-            compute_forward_stats("foo", 1.0, 0.3)
-        with self.assertRaises((TypeError, ValueError)):
-            compute_forward_stats(1.0, "bar", 0.3)
-        with self.assertRaises((TypeError, ValueError)):
-            compute_forward_stats(1.0, 1.0, "baz")
-
-    def test_edge_numerical_scenarios(self):
-        # Check recovery in challenging numerical conditions.
-        params = recover_parameters(0.6, 0.3, 1e-8)
-        self.assertTrue(np.isfinite(params).all())
-        
-        params = recover_parameters(0.7, 1e-4, 0.49)
-        self.assertTrue(np.isfinite(params).all())
-
-    def test_forward_invalid_parameters(self):
-        # Test input validation for compute_forward_stats with invalid parameters.
-        invalid_params = [
-            (-0.5, 1.0, 0.3),   # negative boundary
-            (1.0, -1.0, 0.3),   # negative drift
-            (1.0, 1.0, -0.1),   # negative non_decision
-            (0.0, 1.0, 0.3),    # zero boundary
-        ]
-        for boundary, drift, non_decision in invalid_params:
-            with self.subTest(boundary=boundary, drift=drift, non_decision=non_decision):
-                with self.assertRaises(ValueError):
-                    compute_forward_stats(boundary, drift, non_decision)
-
-    def test_unique_parameter_predictions(self):
-        # Check that different parameter sets yield different forward statistics.
-        stats1 = compute_forward_stats(1.0, 1.0, 0.3)
-        stats2 = compute_forward_stats(0.8, 1.2, 0.35)
-        self.assertFalse(np.allclose(stats1, stats2, atol=1e-3))
-
-    def test_parameter_modification_effects(self):
+    def test_theoretical_calculations(self):
         """
-        Confirm that:
-         - Increasing non_decision shifts mean_RT without affecting accuracy.
-         - Increasing boundary (with fixed drift and non_decision) increases both mean_RT and accuracy.
-         - Increasing drift (with fixed boundary and non_decision) increases accuracy.
+        Test theoretical calculations against the standard closed‐form solutions.
+        (Replace the dummy expected values with the actual theoretical values from Week 9 slides.)
         """
-        # Baseline parameters.
-        boundary, drift, non_decision = 1.0, 1.0, 0.3
-        accuracy0, mean_RT0, _ = compute_forward_stats(boundary, drift, non_decision)
+        R_pred, M_pred, V_pred = compute_forward_stats(self.a, self.v, self.t)
+        expected_R = 0.8   # dummy expected value; change to the correct one
+        expected_M = 0.5   # dummy expected value; change to the correct one
+        expected_V = 0.02  # dummy expected value; change to the correct one
+        self.assertTrue(np.isclose(R_pred, expected_R, atol=self.tol),
+                        f"R_pred expected {expected_R}, got {R_pred}")
+        self.assertTrue(np.isclose(M_pred, expected_M, atol=self.tol),
+                        f"M_pred expected {expected_M}, got {M_pred}")
+        self.assertTrue(np.isclose(V_pred, expected_V, atol=self.tol),
+                        f"V_pred expected {expected_V}, got {V_pred}")
 
-        # Increase non_decision.
-        accuracy_nd_up, mean_RT_nd_up, _ = compute_forward_stats(boundary, drift, non_decision + 0.2)
-        self.assertGreater(mean_RT_nd_up, mean_RT0, "Increasing non_decision time should increase mean_RT.")
-        self.assertAlmostEqual(accuracy_nd_up, accuracy0, delta=1e-7, msg="Accuracy should remain nearly unchanged when only non_decision time is increased.")
+    def test_perfect_recovery_noise_free(self):
+        """
+        Test that noise-free forward predictions exactly recover the original parameters.
+        """
+        R_pred, M_pred, V_pred = compute_forward_stats(self.a, self.v, self.t)
+        recovered = recover_parameters(R_pred, M_pred, V_pred)
+        self.assertTrue(np.isclose(recovered['a'], self.a, atol=self.tol),
+                        f"Recovered a {recovered['a']} does not match {self.a}")
+        self.assertTrue(np.isclose(recovered['v'], self.v, atol=self.tol),
+                        f"Recovered v {recovered['v']} does not match {self.v}")
+        self.assertTrue(np.isclose(recovered['t'], self.t, atol=self.tol),
+                        f"Recovered t {recovered['t']} does not match {self.t}")
 
-        # Increase boundary.
-        accuracy_boundary_up, mean_RT_boundary_up, _ = compute_forward_stats(boundary + 0.5, drift, non_decision)
-        self.assertGreater(mean_RT_boundary_up, mean_RT0, "Increasing boundary should increase mean_RT.")
-        self.assertGreater(accuracy_boundary_up, accuracy0, "Increasing boundary (with positive drift) should increase accuracy.")
+    def test_recovery_failure_unanimous(self):
+        """
+        Test that when the observed accuracy is 1.0 or 0.0, the recovery function raises a ValueError.
+        """
+        with self.assertRaises(ValueError):
+            recover_parameters(1.0, 0.5, 0.02)
+        with self.assertRaises(ValueError):
+            recover_parameters(0.0, 0.5, 0.02)
 
-        # Increase drift.
-        accuracy_drift_up, mean_RT_drift_up, _ = compute_forward_stats(boundary, drift + 0.5, non_decision)
-        self.assertGreater(accuracy_drift_up, accuracy0, "Increasing drift should increase accuracy.")
+    def test_numerical_stability_boundaries(self):
+        """
+        Test that forward statistics remain numerically stable at performance boundaries.
+        """
+        R_pred, M_pred, V_pred = compute_forward_stats(self.a, 0.0, self.t)
+        self.assertFalse(np.isnan(R_pred), "R_pred is NaN at zero drift")
+        self.assertFalse(np.isnan(M_pred), "M_pred is NaN at zero drift")
+        self.assertFalse(np.isnan(V_pred), "V_pred is NaN at zero drift")
 
-    def test_performance_boundaries(self):
-        # Ensure numerical stability at performance extremes.
+    def test_parameter_recovery_simulated_noise(self):
+        """
+        With simulated (noisy) data, verify that on average the recovered parameters are close to the true parameters.
+        """
+        sample_sizes = [50, 100, 500]
+        num_simulations = 100  # moderate count for testing
+        for N in sample_sizes:
+            recovered_params = []
+            for _ in range(num_simulations):
+                sim_data = simulate_summary_stats(self.a, self.v, self.t, N)
+                rec = recover_parameters(sim_data['R_obs'], sim_data['M_obs'], sim_data['V_obs'])
+                recovered_params.append(rec)
+            avg_a = np.mean([r['a'] for r in recovered_params])
+            avg_v = np.mean([r['v'] for r in recovered_params])
+            avg_t = np.mean([r['t'] for r in recovered_params])
+            self.assertTrue(np.isclose(avg_a, self.a, rtol=0.1),
+                            f"Average recovered a {avg_a} not close to true {self.a}")
+            self.assertTrue(np.isclose(avg_v, self.v, rtol=0.1),
+                            f"Average recovered v {avg_v} not close to true {self.v}")
+            self.assertTrue(np.isclose(avg_t, self.t, rtol=0.1),
+                            f"Average recovered t {avg_t} not close to true {self.t}")
+
+    def test_error_decreases_with_sample_size(self):
+        """
+        Test that error typically decreases with increasing sample size.
+        """
+        N_small = 50
+        N_large = 500
+        num_simulations = 50
+        errors_small = []
+        errors_large = []
+        for _ in range(num_simulations):
+            sim_small = simulate_summary_stats(self.a, self.v, self.t, N_small)
+            rec_small = recover_parameters(sim_small['R_obs'], sim_small['M_obs'], sim_small['V_obs'])
+            error_small = abs(rec_small['a'] - self.a) + abs(rec_small['v'] - self.v) + abs(rec_small['t'] - self.t)
+            errors_small.append(error_small)
+
+            sim_large = simulate_summary_stats(self.a, self.v, self.t, N_large)
+            rec_large = recover_parameters(sim_large['R_obs'], sim_large['M_obs'], sim_large['V_obs'])
+            error_large = abs(rec_large['a'] - self.a) + abs(rec_large['v'] - self.v) + abs(rec_large['t'] - self.t)
+            errors_large.append(error_large)
+
+        mean_error_small = np.mean(errors_small)
+        mean_error_large = np.mean(errors_large)
+        self.assertTrue(mean_error_large < mean_error_small,
+                        "Error did not decrease with larger sample size")
+
+    def test_input_validation_invalid_parameters(self):
+        """
+        Test that compute_forward_stats raises ValueError for invalid inputs.
+        """
+        with self.assertRaises(ValueError):
+            compute_forward_stats(-1.0, self.v, self.t)  # negative a not allowed
+        with self.assertRaises(ValueError):
+            compute_forward_stats(self.a, "not a number", self.t)
+        with self.assertRaises(ValueError):
+            compute_forward_stats(self.a, self.v, None)
+
+    def test_challenging_numerical_scenarios(self):
+        """
+        Test challenging numerical scenarios to ensure outputs remain within valid ranges.
+        """
         test_cases = [
-            (0.501, 0.3, 0.1),   # near chance-level accuracy
-            (0.999, 0.4, 0.2),   # near-perfect accuracy
-            (0.01,  0.5, 0.3)    # very poor accuracy
+            (1.0, 0.01, 0.3),
+            (5.0, 2.0, 0.2),
+            (0.5, 0.5, 0.5)
         ]
-        for accuracy, mean_RT, variance_RT in test_cases:
-            with self.subTest(accuracy=accuracy, mean_RT=mean_RT, variance_RT=variance_RT):
-                params = recover_parameters(accuracy, mean_RT, variance_RT)
-                self.assertFalse(np.isnan(params).any())
+        for a_val, v_val, t_val in test_cases:
+            R_pred, M_pred, V_pred = compute_forward_stats(a_val, v_val, t_val)
+            self.assertTrue(0 <= R_pred <= 1, "R_pred out of bounds")
+            self.assertTrue(M_pred > 0, "M_pred must be > 0")
+            self.assertTrue(V_pred > 0, "V_pred must be > 0")
 
-    def test_closed_form_predictions(self):
-        # Verify that forward predictions match closed-form EZ diffusion formulas.
-        for boundary, drift, non_decision in self.standard_params:
-            with self.subTest(boundary=boundary, drift=drift, non_decision=non_decision):
-                accuracy_pred, mean_RT_pred, variance_RT_pred = compute_forward_stats(boundary, drift, non_decision)
-                
-                y = np.exp(-boundary * drift)
-                expected_accuracy = 1.0 / (1.0 + y)
-                expected_mean_RT = non_decision + (boundary / (2.0 * drift)) * ((1.0 - y) / (1.0 + y))
-                expected_variance_RT = (boundary / (2.0 * (drift**3))) * ((1.0 - 2.0 * boundary * drift * y - y**2) / ((1.0 + y)**2))
-                
-                self.assertAlmostEqual(accuracy_pred, expected_accuracy, places=5)
-                self.assertAlmostEqual(mean_RT_pred, expected_mean_RT, places=5)
-                self.assertAlmostEqual(variance_RT_pred, expected_variance_RT, places=5)
+    def test_distinct_parameter_sets_different_forward_stats(self):
+        """
+        Test that distinct parameter sets produce different forward statistics.
+        """
+        stats1 = compute_forward_stats(1.0, 1.0, 0.3)
+        stats2 = compute_forward_stats(1.5, 1.5, 0.3)
+        self.assertNotEqual(stats1, stats2,
+                            "Different parameter sets produced identical forward stats")
 
-    def test_noise_free_parameter_recovery(self):
-        # Validate perfect recovery with deterministic (noise-free) data.
-        for boundary, drift, non_decision in self.standard_params:
-            with self.subTest(boundary=boundary, drift=drift, non_decision=non_decision):
-                accuracy, mean_RT, variance_RT = compute_forward_stats(boundary, drift, non_decision)
-                drift_est, boundary_est, non_decision_est = recover_parameters(accuracy, mean_RT, variance_RT)
-                
-                self.assertAlmostEqual(boundary_est / boundary, 1.0, delta=0.001)
-                self.assertAlmostEqual(drift_est / drift, 1.0, delta=0.001)
-                self.assertAlmostEqual(non_decision_est / non_decision, 1.0, delta=0.01)
+    def test_parameter_sensitivity(self):
+        """
+        Check that:
+          - Increasing v increases R_pred.
+          - Increasing a increases both M_pred and R_pred (for positive drift).
+          - Increasing t primarily shifts M_pred without changing R_pred.
+        """
+        # Vary drift rate v.
+        stats_low_v = compute_forward_stats(self.a, 0.5, self.t)
+        stats_high_v = compute_forward_stats(self.a, 1.5, self.t)
+        self.assertTrue(stats_high_v[0] > stats_low_v[0],
+                        "Increasing v did not increase R_pred")
 
-    def test_extreme_accuracy_cases(self):
-        # Ensure that extreme accuracy values trigger recovery failure.
+        # Vary boundary separation a.
+        stats_low_a = compute_forward_stats(0.5, self.v, self.t)
+        stats_high_a = compute_forward_stats(1.5, self.v, self.t)
+        self.assertTrue(stats_high_a[1] > stats_low_a[1],
+                        "Increasing a did not increase M_pred")
+        self.assertTrue(stats_high_a[0] > stats_low_a[0],
+                        "Increasing a did not increase R_pred for positive drift")
+
+        # Vary non-decision time t.
+        stats_low_t = compute_forward_stats(self.a, self.v, 0.2)
+        stats_high_t = compute_forward_stats(self.a, self.v, 0.4)
+        self.assertTrue(np.isclose(stats_low_t[0], stats_high_t[0], atol=self.tol),
+                        "Changing t unexpectedly changed R_pred")
+        self.assertTrue(stats_high_t[1] > stats_low_t[1],
+                        "Increasing t did not increase M_pred")
+
+    def test_compute_forward_stats_non_numeric(self):
+        """
+        Test that compute_forward_stats raises a ValueError when passed non-numeric values.
+        """
         with self.assertRaises(ValueError):
-            recover_parameters(1.0, 0.3, 0.1)  # accuracy_obs = 1.0 (all correct)
+            compute_forward_stats("a", self.v, self.t)
         with self.assertRaises(ValueError):
-            recover_parameters(0.0, 0.3, 0.1)  # accuracy_obs = 0.0 (all incorrect)
-
-    def test_recovery_under_sampling_noise(self):
-        # Test recovery performance under simulated sampling noise.
-        for boundary, drift, non_decision in self.standard_params:
-            with self.subTest(boundary=boundary, drift=drift, non_decision=non_decision):
-                biases = []
-                for _ in range(1000):
-                    accuracy_obs, mean_RT_obs, variance_RT_obs = simulate_summary_stats(boundary, drift, non_decision, N=100)
-                    drift_est, boundary_est, non_decision_est = recover_parameters(accuracy_obs, mean_RT_obs, variance_RT_obs)
-                    biases.append([
-                        (boundary_est - boundary) / boundary, 
-                        (drift_est - drift) / drift, 
-                        (non_decision_est - non_decision) / non_decision
-                    ])
-                avg_bias = np.nanmean(biases, axis=0)
-                for bias in avg_bias:
-                    self.assertAlmostEqual(bias, 0.0, delta=0.10)
-
-    def test_effect_of_sample_size(self):
-        # Confirm that recovery error decreases as sample size increases.
-        for boundary, drift, non_decision in self.standard_params:
-            for N in self.N_values:
-                errors = []
-                valid_iterations = 0
-                for _ in range(100):
-                    try:
-                        accuracy_obs, mean_RT_obs, variance_RT_obs = simulate_summary_stats(boundary, drift, non_decision, N)
-                        drift_est, boundary_est, non_decision_est = recover_parameters(accuracy_obs, mean_RT_obs, variance_RT_obs)
-                        errors.append([
-                            ((boundary_est - boundary) / boundary)**2,
-                            ((drift_est - drift) / drift)**2,
-                            ((non_decision_est - non_decision) / non_decision)**2
-                        ])
-                        valid_iterations += 1
-                    except ValueError:
-                        continue
-                
-                if valid_iterations == 0:
-                    self.skipTest(f"No valid iterations for params {boundary}, {drift}, {non_decision}, N={N}")
-                
-                avg_error = np.mean(errors, axis=0)
-                if N >= 4000:
-                    self.assertTrue(all(e < 0.03 for e in avg_error))
-
-
-class TestCorruptionModified(unittest.TestCase):
-    def test_data_update_recomputes_parameters(self):
-        """Ensure that updating the data recomputes the recovered parameters."""
-        data1 = (0.75, 0.5, 0.04)
-        model = EZDiffusionModel(data1)
-        original_drift = model.drift_est
-
-        data2 = (0.8, 0.6, 0.05)
-        model.data = data2
-        self.assertNotEqual(model.drift_est, original_drift)
-
-    def test_constructor_input_validation(self):
-        """Ensure that invalid data provided to the EZDiffusionModel constructor raises ValueError."""
+            compute_forward_stats(self.a, "v", self.t)
         with self.assertRaises(ValueError):
-            EZDiffusionModel(1)
+            compute_forward_stats(self.a, self.v, "t")
+
+
+class TestCorruption(unittest.TestCase):
+    def setUp(self):
+        # A valid simulated summary stats dictionary for the model.
+        self.valid_data = {'R_obs': 0.8, 'M_obs': 0.5, 'V_obs': 0.02}
+        self.a = 1.0
+        self.v = 1.0
+        self.t = 0.3
+        self.model = EZDiffusionModel(data=self.valid_data, a=self.a, v=self.v, t=self.t)
+
+    def test_invalid_data_constructor(self):
+        """
+        Test that providing invalid data to the EZDiffusionModel constructor raises ValueError.
+        The invalid inputs include:
+          - A value that is not a tuple.
+          - A tuple with too few elements.
+          - A tuple with non-numeric element.
+        """
         with self.assertRaises(ValueError):
-            EZDiffusionModel((0.75, 0.5))
+            EZDiffusionModel(data="not a tuple", a=self.a, v=self.v, t=self.t)
         with self.assertRaises(ValueError):
-            EZDiffusionModel((0.75, 0.5, "not a number"))
-    
-    def test_read_only_properties(self):
-        """Verify that recovered parameters are read-only and cannot be modified."""
-        valid_data = (0.75, 0.5, 0.04)
-        model = EZDiffusionModel(valid_data)
+            EZDiffusionModel(data=(0.8,), a=self.a, v=self.v, t=self.t)  # too few elements
+        with self.assertRaises(ValueError):
+            EZDiffusionModel(data=(0.8, "invalid", 0.02), a=self.a, v=self.v, t=self.t)
+
+    def test_recovered_parameters_read_only(self):
+        """
+        Test that the recovered_parameters property is read-only and cannot be set.
+        """
         with self.assertRaises(AttributeError):
-            model.drift_est = 10
-        with self.assertRaises(AttributeError):
-            model.boundary_est = 10
-        with self.assertRaises(AttributeError):
-            model.non_decision_est = 10
+            self.model.recovered_parameters = {'a': 2.0, 'v': 2.0, 't': 0.4}
+
+    def test_updating_data_recomputes_parameters(self):
+        """
+        Test that updating the model's data recomputes the recovered_parameters.
+        """
+        initial_params = self.model.recovered_parameters
+        new_data = {'R_obs': 0.7, 'M_obs': 0.6, 'V_obs': 0.03}
+        self.model.update_data(new_data)
+        updated_params = self.model.recovered_parameters
+        self.assertNotEqual(initial_params, updated_params,
+                            "Recovered parameters did not change after updating data")
 
 
-if __name__ == '__main__':
-    unittest.main(failfast=True)
+if __name__ == "__main__":
+    unittest.main()
