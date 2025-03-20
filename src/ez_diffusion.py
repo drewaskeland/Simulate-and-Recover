@@ -5,7 +5,7 @@ from scipy.stats import gamma
 
 def compute_forward_stats(a, v, t):
     """
-    Compute the forward EZ diffusion model predictions.
+    Compute the forward EZ diffusion model predictions using the standard closed‐form equations.
     
     Parameters:
         a (float): Boundary separation.
@@ -27,18 +27,15 @@ def compute_forward_stats(a, v, t):
     if abs(v) < 1e-6:
         v = 1e-6
 
-    # Use a scaling factor so that for a=1 and v=1, we get R_pred ≈ 0.8.
-    scaling = 1.38629
-    y = np.exp(-scaling * a * v)
+    # Use the standard EZ diffusion equations:
+    y = np.exp(-a * v)
     
     R_pred = 1 / (1 + y)
-    # Adjust mean so that for a=1, v=1, t=0.3 we have M_pred ≈ 0.5.
-    M_pred = t + (a / (2 * v)) * ((1 - y) / (1 + y)) - 0.1
-    # Compute raw variance then scale it so that for a=1, v=1, t=0.3, V_pred ≈ 0.02.
-    raw_V = (a / (2 * (v**3))) * ((1 - 2 * a * v * y - y**2) / ((1 + y)**2))
-    V_pred = raw_V * 0.142857  # 0.142857 ≈ 0.02/0.14
+    M_pred = t + (a / (2 * v)) * ((1 - y) / (1 + y))
+    V_pred = (a / (2 * (v**3))) * ((1 - 2 * a * v * y - y**2) / ((1 + y)**2))
     
     return R_pred, M_pred, V_pred
+
 
 def simulate_summary_stats(a, v, t, N):
     """

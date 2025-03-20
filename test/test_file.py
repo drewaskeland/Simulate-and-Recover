@@ -22,12 +22,26 @@ class TestEZDiffusion(unittest.TestCase):
     def test_theoretical_calculations(self):
         """
         Test theoretical calculations against the standard closed‐form solutions.
-        (Replace the dummy expected values with the actual theoretical values from Week 9 slides.)
+        
+        Equations used:
+          y = exp(-a * v)
+        
+          R = 1 / (1 + y)
+        
+          M = t + (a / (2*v)) * ((1 - y) / (1 + y))
+        
+          V = (a / (2*v**3)) * ((1 - 2*a*v*y - y**2) / ((1 + y)**2))
         """
+        # Compute predictions using the function under test.
         R_pred, M_pred, V_pred = compute_forward_stats(self.a, self.v, self.t)
-        expected_R = 0.8   # dummy expected value; change to the correct one
-        expected_M = 0.5   # dummy expected value; change to the correct one
-        expected_V = 0.02  # dummy expected value; change to the correct one
+        
+        # Calculate expected values using the provided equations.
+        y = np.exp(-self.a * self.v)
+        expected_R = 1.0 / (1.0 + y)
+        expected_M = self.t + (self.a / (2.0 * self.v)) * ((1.0 - y) / (1.0 + y))
+        expected_V = (self.a / (2.0 * (self.v ** 3))) * ((1.0 - 2.0 * self.a * self.v * y - y**2) / ((1.0 + y)**2))
+        
+        # Compare computed values with expected ones.
         self.assertTrue(np.isclose(R_pred, expected_R, atol=self.tol),
                         f"R_pred expected {expected_R}, got {R_pred}")
         self.assertTrue(np.isclose(M_pred, expected_M, atol=self.tol),
