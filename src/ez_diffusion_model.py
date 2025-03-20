@@ -1,3 +1,5 @@
+#Code produced with Chat GPT assistance
+
 from src.recovery import recover_parameters
 
 class EZDiffusionModel:

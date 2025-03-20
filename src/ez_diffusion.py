@@ -1,3 +1,5 @@
+#Code produced with Chat GPT assistance
+
 import numpy as np
 from scipy.stats import gamma
 
