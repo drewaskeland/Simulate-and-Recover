@@ -1,3 +1,5 @@
+#Code produced with Chat GPT assistance
+
 import numpy as np
 from ez_diffusion import simulate_summary_stats
 from recovery import recover_parameters
