@@ -91,7 +91,7 @@ class EZDiffusionModel:
 
 if __name__ == "__main__":
     # Example observed summary statistics (R_obs, M_obs, V_obs)
-    example_data = (0.75, 0.5, 0.04)
+    example_data = (0.2, 0.5, 0.1)
     model = EZDiffusionModel(example_data)
     print("Recovered drift rate:", model.v_est)
     print("Recovered boundary separation:", model.a_est)
